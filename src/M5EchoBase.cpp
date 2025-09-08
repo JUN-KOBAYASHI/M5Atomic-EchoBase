@@ -97,6 +97,13 @@ bool M5EchoBase::es8311_codec_init(int sample_rate)
 
 bool M5EchoBase::i2s_driver_init(int sample_rate)
 {
+#if USE_NEW_I2S_API
+    I2S.setPins(_i2s_bck, _i2s_ws, _i2s_do, _i2s_di, -1); //SCK, WS, SDOUT, SDIN, MCLK
+    I2S.begin(I2S_MODE_STD, sample_rate, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+
+    return true;
+
+#else
     // Initialize I2S driver
     i2s_cfg.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX);
     i2s_cfg.sample_rate          = (uint32_t)sample_rate;
@@ -132,6 +139,7 @@ bool M5EchoBase::i2s_driver_init(int sample_rate)
     i2s_start(i2s_num);
 
     return true;
+#endif
 }
 
 bool M5EchoBase::setSpeakerVolume(int volume)
@@ -152,6 +160,29 @@ bool M5EchoBase::setMicGain(es8311_mic_gain_t gain)
 {
     if (es8311_microphone_gain_set(es_handle, gain) != ESP_OK) {
         ESP_LOGI(TAG, "Failed to set microphone gain");
+        return false;
+    }
+    return true;
+}
+
+bool M5EchoBase::setMicPGAGain(bool digital_mic, uint8_t pga_gain)
+{
+    if (es8311_microphone_pgagain_config(es_handle, false, pga_gain) != ESP_OK) {
+        ESP_LOGI(TAG, "Failed to configure ES8311 PGA gain");
+        return false;
+    }
+    return true;
+}
+
+
+bool M5EchoBase::setMicAdcVolume(uint8_t volume) {
+    if (volume > 100) {
+        ESP_LOGI(TAG, "ADC Volume out of range (0-100)");
+        return false;
+    }
+
+    if (es8311_set_adc_volume(es_handle, volume) != ESP_OK) {
+        ESP_LOGI(TAG, "Failed to set ADC volume");
         return false;
     }
     return true;
@@ -207,7 +238,11 @@ bool M5EchoBase::setMute(bool mute)
 int M5EchoBase::getBufferSize(int duration, int sample_rate)
 {
     if (!sample_rate) {
+#if USE_NEW_I2S_API
+        sample_rate = I2S.txSampleRate();
+#else 
         sample_rate = i2s_cfg.sample_rate;
+#endif
     }
     return duration * sample_rate * 2 * 2;  // sample_rate * bytes_per_sample * channels
 }
@@ -215,7 +250,11 @@ int M5EchoBase::getBufferSize(int duration, int sample_rate)
 int M5EchoBase::getDuration(int size, int sample_rate)
 {
     if (!sample_rate) {
+#if USE_NEW_I2S_API
+        sample_rate = I2S.txSampleRate();
+#else 
         sample_rate = i2s_cfg.sample_rate;
+#endif
     }
     return size / (sample_rate * 2 * 2);  // sample_rate * bytes_per_sample * channels
 }
@@ -242,12 +281,21 @@ bool M5EchoBase::record(FS& fs, const char* filename, int size)
         }
 
         size_t bytes_read = 0;
+#if USE_NEW_I2S_API
+        bytes_read    = I2S.readBytes((char*)buffer, bytes_to_read);
+        if (bytes_read < 0) {
+            ESP_LOGI(TAG, "Recording failed during I2S read");
+            file.close();
+            return false;
+        }
+#else
         esp_err_t err     = i2s_read(i2s_num, buffer, bytes_to_read, &bytes_read, portMAX_DELAY);
         if (err != ESP_OK) {
             ESP_LOGI(TAG, "Recording failed during I2S read");
             file.close();
             return false;
         }
+#endif
 
         file.write(buffer, bytes_read);
         bytes_recorded += bytes_read;
@@ -263,11 +311,19 @@ bool M5EchoBase::record(uint8_t* buffer, int size)
     size_t bytes_to_record = size;  // sample_rate * bytes_per_sample * channels
 
     size_t bytes_read = 0;
+#if USE_NEW_I2S_API
+        bytes_read    = I2S.readBytes((char*)buffer, bytes_to_record);
+        if (bytes_read < 0) {
+            ESP_LOGI(TAG, "Recording failed during I2S read");
+            return false;
+        }
+#else
     esp_err_t err     = i2s_read(i2s_num, buffer, bytes_to_record, &bytes_read, getDuration(size) * 1000 + 1000);
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "Recording failed");
         return false;
     }
+#endif
     return true;
 }
 
@@ -293,12 +349,21 @@ bool M5EchoBase::play(FS& fs, const char* filename)
         size_t bytes_read = file.read(buffer, bytes_to_read);
         if (bytes_read > 0) {
             size_t bytes_written = 0;
+#if USE_NEW_I2S_API
+            bytes_written = I2S.write(buffer, bytes_read);
+            if (bytes_written < 0) {
+                ESP_LOGI(TAG, "Playback failed during I2S write");
+                file.close();
+                return false;
+            }
+#else
             esp_err_t err        = i2s_write(i2s_num, buffer, bytes_read, &bytes_written, portMAX_DELAY);
             if (err != ESP_OK) {
                 ESP_LOGI(TAG, "Playback failed during I2S write");
                 file.close();
                 return false;
             }
+#endif
         }
     }
 
@@ -309,11 +374,23 @@ bool M5EchoBase::play(FS& fs, const char* filename)
 bool M5EchoBase::play(const uint8_t* buffer, int size)
 {
     size_t bytes_written = 0;
+#if USE_NEW_I2S_API
+    bytes_written = I2S.write(buffer, size);
+    if (bytes_written < 0) {
+        ESP_LOGI(TAG, "Playback failed");
+        return false;
+    }
+#else
     esp_err_t err        = i2s_write(i2s_num, buffer, size, &bytes_written, portMAX_DELAY);
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "Playback failed");
         return false;
     }
+#endif
+#if USE_NEW_I2S_API
+
+#else
     i2s_zero_dma_buffer(i2s_num);
+#endif
     return true;
 }

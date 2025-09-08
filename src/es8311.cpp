@@ -331,6 +331,30 @@ esp_err_t es8311_microphone_config(es8311_handle_t dev, bool digital_mic)
     return es8311_write_reg(dev, ES8311_SYSTEM_REG14, reg14);
 }
 
+esp_err_t es8311_microphone_pgagain_config(es8311_handle_t dev, bool digital_mic, uint8_t pga_gain)
+{
+    return es8311_write_reg(dev, ES8311_SYSTEM_REG14, pga_gain);
+}
+
+
+esp_err_t es8311_set_adc_volume(es8311_handle_t dev, uint8_t volume)
+{
+    if (volume < 0) {
+        volume = 0;
+    } else if (volume > 100) {
+        volume = 100;
+    }
+
+    int reg17;
+    if (volume == 0) {
+        reg17 = 0;
+    } else {
+        reg17 = ((volume) * 256 / 100) - 1;
+    }
+
+    return es8311_write_reg(dev, ES8311_ADC_REG17, reg17); 
+}
+
 esp_err_t es8311_init(es8311_handle_t dev, const es8311_clock_config_t *const clk_cfg, const es8311_resolution_t res_in, const es8311_resolution_t res_out)
 {
     ESP_RETURN_ON_FALSE(

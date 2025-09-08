@@ -40,6 +40,22 @@ typedef enum {
 } es8311_mic_gain_t;
 
 typedef enum {
+    ES8311_MIC_PGA_GAIN_MIN = -1,
+    ES8311_MIC_PGA_GAIN_0DB,
+    ES8311_MIC_PGA_GAIN_3DB,
+    ES8311_MIC_PGA_GAIN_6DB,
+    ES8311_MIC_PGA_GAIN_9DB,
+    ES8311_MIC_PGA_GAIN_12DB,
+    ES8311_MIC_PGA_GAIN_15DB,
+    ES8311_MIC_PGA_GAIN_18DB,
+    ES8311_MIC_PGA_GAIN_21DB,
+    ES8311_MIC_PGA_GAIN_24DB,
+    ES8311_MIC_PGA_GAIN_27DB,
+    ES8311_MIC_PGA_GAIN_30DB,
+    ES8311_MIC_PGA_GAIN_MAX
+} es8311_mic_pga_gain_t;
+
+typedef enum {
     ES8311_FADE_OFF = 0,
     ES8311_FADE_4LRCK, // 4LRCK means ramp 0.25dB/4LRCK
     ES8311_FADE_8LRCK,
@@ -169,6 +185,29 @@ esp_err_t es8311_microphone_gain_set(es8311_handle_t dev, es8311_mic_gain_t gain
  *     - Else fail
  */
 esp_err_t es8311_microphone_config(es8311_handle_t dev, bool digital_mic);
+
+/**
+ * @brief Configure microphone PGAgain
+ *
+ * @param dev ES8311 handle
+ * @param[in] digital_mic Set to true for digital microphone
+ * @param[in] pga_gain PGAgain value
+ * @return
+ *     - ESP_OK success
+ *     - Else fail
+ */
+esp_err_t es8311_microphone_pgagain_config(es8311_handle_t dev, bool digital_mic, uint8_t pga_gain);
+
+/**
+ * @brief Set ADC volume
+ * 
+ * @param dev ES8311 handle
+ * @param[in] volume Volume level (0-100)
+ * @return  
+ *    - ESP_OK success
+ *    - Else fail
+ */
+esp_err_t es8311_set_adc_volume(es8311_handle_t dev, uint8_t volume);
 
 /**
  * @brief Configure sampling frequency
